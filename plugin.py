@@ -119,12 +119,10 @@ class SR(Plugin):
     """
     def __init__(self, arguments: "Namespace") -> None:
         super().__init__(arguments)
-        self.plugin_name = "BasicSuperRes"
-        model_folder = "plugin/BasicSuperRes/experiments/pretrained_models/"
-        self.method = arguments.config["model_name"].split("/")[0]
-        self.model_path = os.path.join(model_folder, arguments.config["model_name"])
-        self.esrgan_model_path = arguments.config["esrgan_model"]
-        self.swinir_model_path = arguments.config["swinir_model"]
+        self.plugin_name = "BasicSR"
+        model_folder = "plugin/BasicSR/experiments/pretrained_models/"
+        self.esrgan_model_path = os.path.join(model_folder, arguments.config["esrgan_model"])
+        self.swinir_model_path = os.path.join(model_folder, arguments.config["swinir_model"])
         if sys.platform == "darwin":
             self.device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
         else:
@@ -148,10 +146,11 @@ class SR(Plugin):
         # Load SwinIR
         if self.swinir_model_path is not None:
             split_name = self.swinir_model_path.split("_")
-            task, scale, patch_size = split_name[1], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[3][1:3])
+            print(split_name)
+            task, scale, patch_size = split_name[2], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[4][1:3])
             if task == "classicalSR":
                 task = "classical_sr"
-            swin_args = {"task": task, "scale": scale, "patch_size": patch_size, "model_path": self.model_path}
+            swin_args = {"task": task, "scale": scale, "patch_size": patch_size, "model_path": self.swinir_model_path}
             swin_input = Namespace(**swin_args)
             self.swin_model = define_model(swin_input)
             self.swin_scale = scale
