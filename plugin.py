@@ -52,7 +52,8 @@ async def startup_event():
         set_model()
         print("Successfully started up")
         sr_plugin.notify_main_system_of_startup("True")
-    except:
+    except Exception as e:
+        # raise e
         sr_plugin.notify_main_system_of_startup("False")
 
 @app.get("/set_model/")
@@ -62,8 +63,8 @@ def set_model():
     sr_plugin = SR(Namespace(**args))
     # try:
     # sd_plugin.set_model(args["model_name"], dtype=args["model_dtype"])
-    model_name = sr_plugin.config["model_name"]
-    return {"status": "Success", "detail": f"Model set successfully to {model_name}"}
+    # model_name = sr_plugin.config["model_name"
+    return {"status": "Success", "detail": f"Model set successfully"}
 
 @app.get("/execute/{img_id}")
 def execute(img_id: str):
@@ -96,7 +97,6 @@ def video_superres(img_list_id: str):
     image_list = image_list.reshape(shape)
     # image = np.array(image)
     output_list = sr_plugin.video_super_res(image_list)
-    print(np.array(output_list).shape, np.max(np.array(output_list)))
     image_id = store_multiple_images(np.array(output_list))
 
     return {"status": "Success", "output_img": image_id}
@@ -146,7 +146,6 @@ class SR(Plugin):
         # Load SwinIR
         if self.swinir_model_path is not None:
             split_name = self.swinir_model_path.split("_")
-            print(split_name)
             task, scale, patch_size = split_name[2], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[4][1:3])
             if task == "classicalSR":
                 task = "classical_sr"
@@ -174,7 +173,7 @@ class SR(Plugin):
         if self.esrgan_model is not None:
             try:
                 with torch.no_grad():
-                    esrgan_output = self.model(img)
+                    esrgan_output = self.esrgan_model(img)
             except Exception as error:
                 print('Error')
             
@@ -191,7 +190,7 @@ class SR(Plugin):
                     mod_pad_w = window_size - w % window_size
                 img = F.pad(img, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
 
-                output = self.model(img)
+                output = self.swin_model(img)
                 _, _, h, w = output.size()
                 swinir_output = output[:, :, 0:h - mod_pad_h * self.swin_scale, 0:w - mod_pad_w * self.swin_scale]
         esrgan_output = self.to_image(esrgan_output)

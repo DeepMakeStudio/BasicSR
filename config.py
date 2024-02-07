@@ -16,14 +16,14 @@ endpoints = {
     "upres_image": {
         "call": "execute",
         "inputs": {
-            "img_id": "Text",
+            "img": "Image",
         },
         "outputs": {"output_img": "Image"}
     },
     "upres_video": {
         "call": "video_superres",
         "inputs": {
-            "img_list_id": "Text",
+            "img_list_id": "ImageList",
         },
         "outputs": {"output_imgs": "Image"}
     }
