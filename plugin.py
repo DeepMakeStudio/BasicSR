@@ -19,7 +19,7 @@ from basicsr.archs.basicvsr_arch import BasicVSR
 from basicsr.utils.img_util import tensor2img
 from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
-from plugin.BasicSuperRes.inference.inference_swinir import define_model
+from .BasicSR.inference.inference_swinir import define_model
 from torch.nn import functional as F
 
 
@@ -73,18 +73,16 @@ def execute(img_id: str):
     imagebytes = fetch_image(img_id)
     image = Image.open(BytesIO(imagebytes))
 
-    # image = np.array(image)
-    esrgan_img, swinir_img = sr_plugin.super_res(image)
+    output_img = sr_plugin.super_res(image)
     output = BytesIO()
-    esrgan_id, swinir_id = "", ""
-    if esrgan_img is not None:
-        esrgan_img.save(output, format="PNG")
-        esrgan_id = store_image(output.getvalue())
-    if swinir_img is not None:
-        swinir_img.save(output, format="PNG")
-        swinir_id = store_image(output.getvalue())
 
-    return {"status": "Success", "esrgan_img": esrgan_id, "swinir_img": swinir_id}
+    if output_img is None:
+        return {"status": "Failed", "detail": "Super resolution failed"}
+    
+    output_img.save(output, format="PNG")
+    output_img_id = store_image(output.getvalue())
+
+    return {"status": "Success", "output_img": output_img_id}
 
 @app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str):
@@ -134,6 +132,7 @@ class SR(Plugin):
         model.load_state_dict(torch.load(model_path)['params'], strict=True)
         model.eval()
         model = model.to(self.device)
+
     def set_model(self) -> None:
         """
         Load given weights into model.
@@ -161,41 +160,36 @@ class SR(Plugin):
         #     self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
 
-    def super_res(self, inputs):
+    def super_res(self, inputs, model="esrgan"):
         """
         Super resolution inference.
         """
-        esrgan_output, swinir_output = None, None
         image = inputs
         image = np.array(image) / 255
         img = torch.from_numpy(np.transpose(image[:, :, [2, 1, 0]], (2, 0, 1))).float()
         img = img.unsqueeze(0).to(self.device)
-        if self.esrgan_model is not None:
-            try:
-                with torch.no_grad():
-                    esrgan_output = self.esrgan_model(img)
-            except Exception as error:
-                print('Error')
-            
-            
-        if self.swin_model is not None:
+        if model == "esrgan":
             with torch.no_grad():
-                window_size = 8
-            # pad input image to be a multiple of window_size
-                mod_pad_h, mod_pad_w = 0, 0
-                _, _, h, w = img.size()
-                if h % window_size != 0:
-                    mod_pad_h = window_size - h % window_size
-                if w % window_size != 0:
-                    mod_pad_w = window_size - w % window_size
-                img = F.pad(img, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
+                esrgan_output = self.esrgan_model(img)
+                output_img = self.to_image(esrgan_output)
+        elif model == "swinir":
+            if self.swin_model is not None:
+                with torch.no_grad():
+                    window_size = 8
+                # pad input image to be a multiple of window_size
+                    mod_pad_h, mod_pad_w = 0, 0
+                    _, _, h, w = img.size()
+                    if h % window_size != 0:
+                        mod_pad_h = window_size - h % window_size
+                    if w % window_size != 0:
+                        mod_pad_w = window_size - w % window_size
+                    img = F.pad(img, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
 
-                output = self.swin_model(img)
-                _, _, h, w = output.size()
-                swinir_output = output[:, :, 0:h - mod_pad_h * self.swin_scale, 0:w - mod_pad_w * self.swin_scale]
-        esrgan_output = self.to_image(esrgan_output)
-        swinir_output = self.to_image(swinir_output)
-        return esrgan_output, swinir_output
+                    output = self.swin_model(img)
+                    _, _, h, w = output.size()
+                    swinir_output = output[:, :, 0:h - mod_pad_h * self.swin_scale, 0:w - mod_pad_w * self.swin_scale]
+            output_img = self.to_image(swinir_output)
+        return output_img
 
     def to_image(self, input):
         if input is not None:
