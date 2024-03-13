@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from PIL import Image
 import numpy as np
 
+import cv2
 from argparse import Namespace
-
 from io import BytesIO
 import torch
 import threading
@@ -19,8 +19,12 @@ from basicsr.archs.basicvsr_arch import BasicVSR
 from basicsr.utils.img_util import tensor2img
 from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
-from .BasicSR.inference.inference_swinir import define_model
+from .inference.inference_swinir import define_model
 from torch.nn import functional as F
+from .video_select import VideoSelect
+from PyQt6.QtWidgets import QApplication
+from qt_material import apply_stylesheet    
+
 
 
 app = FastAPI()
@@ -110,6 +114,35 @@ def self_terminate():
 def shutdown():
     threading.Thread(target=self_terminate, daemon=True).start()
     return {"success": True}
+
+@app.get("/ui/upload_video/")
+def upload_video():
+    app = QApplication(sys.argv)
+    window = VideoSelect()
+    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False)
+    window.show()
+    try:
+        sys.exit(app.exec())
+    except:
+        pass
+    frames = load_video(window.fname)
+    print(f"Frames: {len(frames)}")
+    return {"status": "Success", "detail": "Upload video"}
+
+def load_video(path):
+        cap = cv2.VideoCapture(path)
+        frame_list = []
+        # i = 0
+        while cap.isOpened():
+            # i += 1
+            ret, frame = cap.read()
+            if ret:
+                frame_list.append(frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                break
+        return frame_list
 
 class SR(Plugin):
     """
