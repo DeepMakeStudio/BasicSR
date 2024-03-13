@@ -12,7 +12,7 @@ import threading
 import time
 import psutil
 import sys
-from plugin import Plugin, fetch_image, store_image
+from plugin import Plugin, fetch_image, store_image, store_multiple_images
 from .config import plugin, config, endpoints
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from basicsr.archs.basicvsr_arch import BasicVSR
@@ -21,9 +21,7 @@ from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
 from .inference.inference_swinir import define_model
 from torch.nn import functional as F
-from .video_select import VideoSelect
-from PyQt6.QtWidgets import QApplication
-from qt_material import apply_stylesheet    
+
 
 
 
@@ -115,35 +113,6 @@ def shutdown():
     threading.Thread(target=self_terminate, daemon=True).start()
     return {"success": True}
 
-@app.get("/ui/upload_video/")
-def upload_video():
-    app = QApplication(sys.argv)
-    window = VideoSelect()
-    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False)
-    window.show()
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
-    frames = load_video(window.fname)
-    print(f"Frames: {len(frames)}")
-    return {"status": "Success", "detail": "Upload video"}
-
-def load_video(path):
-        cap = cv2.VideoCapture(path)
-        frame_list = []
-        # i = 0
-        while cap.isOpened():
-            # i += 1
-            ret, frame = cap.read()
-            if ret:
-                frame_list.append(frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-            else:
-                break
-        return frame_list
-
 class SR(Plugin):
     """
     Prediction inference.
@@ -187,10 +156,10 @@ class SR(Plugin):
             self.swin_scale = scale
             self.load_model(self.swinir_model_path, self.swin_model)
 
-        # elif self.method == "BasicVSR":
-        #     self.model = BasicVSR(num_feat=64, num_block=30)
-        #     self.interval = 15
-        #     self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
+        self.vsr_model = BasicVSR(num_feat=64, num_block=30)
+        self.vsr_model.to(self.device)
+        self.interval = 15
+        self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
 
     def super_res(self, inputs, model="esrgan"):
@@ -240,7 +209,7 @@ class SR(Plugin):
         if len(image_list) <= self.interval:  # too many images may cause CUDA out of memory
             imgs = read_img_seq(image_list)
             imgs = imgs.unsqueeze(0).to(self.device)
-            result = self.basicvsr_inference(imgs, self.model, self.save_path)
+            result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
             new_img_list.extend(result)
         else:
             for idx in range(0, num_imgs, self.interval):
@@ -248,7 +217,7 @@ class SR(Plugin):
                 imgs = image_list[idx:idx + interval]
                 imgs = read_img_seq(imgs)
                 imgs = imgs.unsqueeze(0).to(self.device)
-                result = self.basicvsr_inference(imgs, self.model, self.save_path)
+                result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
                 new_img_list.extend(result)
         return new_img_list
 
