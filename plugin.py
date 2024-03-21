@@ -12,7 +12,7 @@ import threading
 import time
 import psutil
 import sys
-from plugin import Plugin, fetch_image, store_image, store_multiple_images
+from plugin import Plugin, fetch_image, store_image, store_multiple_images, fetch_multiple_images, fetch_data
 from .config import plugin, config, endpoints
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from basicsr.archs.basicvsr_arch import BasicVSR
@@ -72,34 +72,36 @@ def set_model():
 def execute(img_id: str):
     # check_model()
 
-    imagebytes = fetch_image(img_id)
-    image = Image.open(BytesIO(imagebytes))
+    image = fetch_image(img_id)
+    # image = Image.open(BytesIO(imagebytes))
 
     output_img = sr_plugin.super_res(image)
-    output = BytesIO()
+    # output = BytesIO()
 
     if output_img is None:
         return {"status": "Failed", "detail": "Super resolution failed"}
     
-    output_img.save(output, format="PNG")
-    output_img_id = store_image(output.getvalue())
+    # output_img.save(output, format="PNG")
+    output_img_id = store_image(output_img)
 
-    return {"status": "Success", "output_img": output_img_id}
+    return {"status": "Success", "output_id": output_img_id}
 
 @app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str):
     # check_model()
-
-    imagebytes = fetch_image(img_list_id)
-    shapebytes = fetch_image(img_list_id + "_shape")
-    image_list = np.frombuffer(imagebytes, dtype=np.uint8)
-    shape = np.frombuffer(shapebytes, dtype="int64")
-    image_list = image_list.reshape(shape)
+    id_data = fetch_data(img_list_id)
+    id_list = id_data.decode("utf-8").split(";")
+    print(id_list, len(id_list))
+    print(len(fetch_multiple_images(id_list)))
+    pil_frames = fetch_multiple_images(id_list)
+    image_list = [np.array(frame) for frame in pil_frames]
+    image_list = np.array(image_list)
     # image = np.array(image)
     output_list = sr_plugin.video_super_res(image_list)
-    image_id = store_multiple_images(np.array(output_list))
+    pil_output = [Image.fromarray(frame) for frame in output_list]
+    image_id = store_multiple_images(pil_output)
 
-    return {"status": "Success", "output_img": image_id}
+    return {"status": "Success", "output_id": image_id}
 
 def self_terminate():
     time.sleep(3)
