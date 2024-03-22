@@ -4,16 +4,16 @@ from fastapi import FastAPI
 from PIL import Image
 import numpy as np
 
-import cv2
-from argparse import Namespace
 from io import BytesIO
+from argparse import Namespace
 import torch
 import threading
 import time
 import psutil
 import sys
-from plugin import Plugin, fetch_image, store_image, store_multiple_images, fetch_multiple_images, fetch_data
+from plugin import Plugin, fetch_pil_image, store_pil_image, store_multiple, fetch_multiple, fetch_image, store_image
 from .config import plugin, config, endpoints
+
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from basicsr.archs.basicvsr_arch import BasicVSR
 from basicsr.utils.img_util import tensor2img
@@ -21,6 +21,7 @@ from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
 from .inference.inference_swinir import define_model
 from torch.nn import functional as F
+
 
 
 
@@ -72,7 +73,7 @@ def set_model():
 def execute(img_id: str):
     # check_model()
 
-    image = fetch_image(img_id)
+    image = fetch_pil_image(img_id)
     # image = Image.open(BytesIO(imagebytes))
 
     output_img = sr_plugin.super_res(image)
@@ -82,24 +83,27 @@ def execute(img_id: str):
         return {"status": "Failed", "detail": "Super resolution failed"}
     
     # output_img.save(output, format="PNG")
-    output_img_id = store_image(output_img)
+    output_img_id = store_pil_image(output_img)
 
     return {"status": "Success", "output_id": output_img_id}
 
 @app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str):
     # check_model()
-    id_data = fetch_data(img_list_id)
+    id_data = fetch_image(img_list_id)
     id_list = id_data.decode("utf-8").split(";")
     print(id_list, len(id_list))
-    print(len(fetch_multiple_images(id_list)))
-    pil_frames = fetch_multiple_images(id_list)
+    # frames = fetch_multiple_images(id_list)
+    # pil_frames = [fetch_pil_image(id) for id in id_list]
+    pil_frames = fetch_multiple(fetch_pil_image, id_list)
     image_list = [np.array(frame) for frame in pil_frames]
     image_list = np.array(image_list)
     # image = np.array(image)
     output_list = sr_plugin.video_super_res(image_list)
     pil_output = [Image.fromarray(frame) for frame in output_list]
-    image_id = store_multiple_images(pil_output)
+    # image_ids = [store_pil_image(frame) for frame in pil_output]
+    # image_id = store_image(bytes(";".join(image_ids).encode("utf-8")))
+    image_id = store_multiple(pil_output, store_pil_image)
 
     return {"status": "Success", "output_id": image_id}
 
