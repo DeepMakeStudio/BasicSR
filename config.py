@@ -5,7 +5,9 @@ plugin = {
     "Version": "0.1.0", 
     "Author": "DeepMake",
     "Description": "Super Resolution using BasicSR",
-    "env": "basicsr"
+    "env": "basicsr",
+    "memory": 10000,
+    "model_memory": 1000
 }
 config = {
     "esrgan_model": "ESRGAN/ESRGAN_SRx4_DF2KOST_official-ff704c30.pth",
