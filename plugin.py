@@ -164,7 +164,7 @@ class SR(Plugin):
 
         self.vsr_model = BasicVSR(num_feat=64, num_block=30)
         self.vsr_model.to(self.device)
-        self.interval = 15
+        self.interval = 12
         self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
 
