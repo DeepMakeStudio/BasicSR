@@ -152,8 +152,9 @@ class SR(Plugin):
 
         # Load SwinIR
         if self.swinir_model_path is not None:
-            split_name = self.swinir_model_path.split("_")
-            task, scale, patch_size = split_name[2], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[4][1:3])
+            target_model = self.swinir_model_path.split("/")[-1]
+            split_name = target_model.split("_")
+            task, scale, patch_size = split_name[1], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[3][1:3])
             if task == "classicalSR":
                 task = "classical_sr"
             swin_args = {"task": task, "scale": scale, "patch_size": patch_size, "model_path": self.swinir_model_path}
