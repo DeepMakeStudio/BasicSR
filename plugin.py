@@ -19,7 +19,7 @@ from basicsr.archs.basicvsr_arch import BasicVSR
 from basicsr.utils.img_util import tensor2img
 from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
-from .BasicSR.inference.inference_swinir import define_model
+from .inference.inference_swinir import define_model
 from torch.nn import functional as F
 
 
@@ -44,22 +44,22 @@ def set_config(update: dict):
     sr_plugin.set_config(update) # TODO: Validate config dict are all valid keys
     return sr_plugin.get_config()
 
-@app.on_event("startup")
-async def startup_event():
+@app.get("/startup/{plugin_name}")
+async def startup_event(plugin_name: str):
     print("Starting up")
     # A slight delay to ensure the app has started up.
     try:
-        set_model()
+        set_model(plugin_name)
         print("Successfully started up")
+        print(sr_plugin.plugin_name)
         sr_plugin.notify_main_system_of_startup("True")
     except Exception as e:
-        # raise e
         sr_plugin.notify_main_system_of_startup("False")
 
 @app.get("/set_model/")
-def set_model():
+def set_model(plugin_name):
     global sr_plugin
-    args = {"plugin": plugin, "config": config, "endpoints": endpoints}
+    args = {"plugin": plugin, "config": config, "endpoints": endpoints, "name": plugin_name}
     sr_plugin = SR(Namespace(**args))
     # try:
     # sd_plugin.set_model(args["model_name"], dtype=args["model_dtype"])
@@ -117,8 +117,7 @@ class SR(Plugin):
     """
     def __init__(self, arguments: "Namespace") -> None:
         super().__init__(arguments)
-        self.plugin_name = "BasicSR"
-        model_folder = "plugin/BasicSR/experiments/pretrained_models/"
+        model_folder = f"plugin/{self.plugin_name}/experiments/pretrained_models/"
         self.esrgan_model_path = os.path.join(model_folder, arguments.config["esrgan_model"])
         self.swinir_model_path = os.path.join(model_folder, arguments.config["swinir_model"])
         if sys.platform == "darwin":
@@ -144,8 +143,9 @@ class SR(Plugin):
 
         # Load SwinIR
         if self.swinir_model_path is not None:
-            split_name = self.swinir_model_path.split("_")
-            task, scale, patch_size = split_name[2], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[4][1:3])
+            target_model = self.swinir_model_path.split("/")[-1]
+            split_name = target_model.split("_")
+            task, scale, patch_size = split_name[1], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[3][1:3])
             if task == "classicalSR":
                 task = "classical_sr"
             swin_args = {"task": task, "scale": scale, "patch_size": patch_size, "model_path": self.swinir_model_path}
@@ -154,10 +154,10 @@ class SR(Plugin):
             self.swin_scale = scale
             self.load_model(self.swinir_model_path, self.swin_model)
 
-        # elif self.method == "BasicVSR":
-        #     self.model = BasicVSR(num_feat=64, num_block=30)
-        #     self.interval = 15
-        #     self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
+        # self.vsr_model = BasicVSR(num_feat=64, num_block=30)
+        # self.vsr_model.to(self.device)
+        # self.interval = 12
+        # self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
 
     def super_res(self, inputs, model="esrgan"):
