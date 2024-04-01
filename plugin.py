@@ -4,23 +4,26 @@ from fastapi import FastAPI
 from PIL import Image
 import numpy as np
 
-from argparse import Namespace
-
 from io import BytesIO
+from argparse import Namespace
 import torch
 import threading
 import time
 import psutil
 import sys
-from plugin import Plugin, fetch_image, store_image
+from plugin import Plugin, fetch_pil_image, store_pil_image, store_multiple, fetch_multiple, fetch_image, store_image
 from .config import plugin, config, endpoints
+
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from basicsr.archs.basicvsr_arch import BasicVSR
 from basicsr.utils.img_util import tensor2img
 from basicsr.utils import img2tensor
 from basicsr.archs.swinir_arch import SwinIR
-from .BasicSR.inference.inference_swinir import define_model
+from .inference.inference_swinir import define_model
 from torch.nn import functional as F
+
+
+
 
 
 app = FastAPI()
@@ -70,34 +73,39 @@ def set_model():
 def execute(img_id: str):
     # check_model()
 
-    imagebytes = fetch_image(img_id)
-    image = Image.open(BytesIO(imagebytes))
+    image = fetch_pil_image(img_id)
+    # image = Image.open(BytesIO(imagebytes))
 
     output_img = sr_plugin.super_res(image)
-    output = BytesIO()
+    # output = BytesIO()
 
     if output_img is None:
         return {"status": "Failed", "detail": "Super resolution failed"}
     
-    output_img.save(output, format="PNG")
-    output_img_id = store_image(output.getvalue())
+    # output_img.save(output, format="PNG")
+    output_img_id = store_pil_image(output_img)
 
-    return {"status": "Success", "output_img": output_img_id}
+    return {"status": "Success", "output_id": output_img_id}
 
 @app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str):
     # check_model()
-
-    imagebytes = fetch_image(img_list_id)
-    shapebytes = fetch_image(img_list_id + "_shape")
-    image_list = np.frombuffer(imagebytes, dtype=np.uint8)
-    shape = np.frombuffer(shapebytes, dtype="int64")
-    image_list = image_list.reshape(shape)
+    id_data = fetch_image(img_list_id)
+    id_list = id_data.decode("utf-8").split(";")
+    print(id_list, len(id_list))
+    # frames = fetch_multiple_images(id_list)
+    # pil_frames = [fetch_pil_image(id) for id in id_list]
+    pil_frames = fetch_multiple(fetch_pil_image, id_list)
+    image_list = [np.array(frame) for frame in pil_frames]
+    image_list = np.array(image_list)
     # image = np.array(image)
     output_list = sr_plugin.video_super_res(image_list)
-    image_id = store_multiple_images(np.array(output_list))
+    pil_output = [Image.fromarray(frame) for frame in output_list]
+    # image_ids = [store_pil_image(frame) for frame in pil_output]
+    # image_id = store_image(bytes(";".join(image_ids).encode("utf-8")))
+    image_id = store_multiple(pil_output, store_pil_image)
 
-    return {"status": "Success", "output_img": image_id}
+    return {"status": "Success", "output_id": image_id}
 
 def self_terminate():
     time.sleep(3)
@@ -144,8 +152,9 @@ class SR(Plugin):
 
         # Load SwinIR
         if self.swinir_model_path is not None:
-            split_name = self.swinir_model_path.split("_")
-            task, scale, patch_size = split_name[2], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[4][1:3])
+            target_model = self.swinir_model_path.split("/")[-1]
+            split_name = target_model.split("_")
+            task, scale, patch_size = split_name[1], int(split_name[-1].split("x")[1].split(".")[0]), int(split_name[3][1:3])
             if task == "classicalSR":
                 task = "classical_sr"
             swin_args = {"task": task, "scale": scale, "patch_size": patch_size, "model_path": self.swinir_model_path}
@@ -154,10 +163,10 @@ class SR(Plugin):
             self.swin_scale = scale
             self.load_model(self.swinir_model_path, self.swin_model)
 
-        # elif self.method == "BasicVSR":
-        #     self.model = BasicVSR(num_feat=64, num_block=30)
-        #     self.interval = 15
-        #     self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
+        self.vsr_model = BasicVSR(num_feat=64, num_block=30)
+        self.vsr_model.to(self.device)
+        self.interval = 12
+        self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
 
     def super_res(self, inputs, model="esrgan"):
@@ -207,7 +216,7 @@ class SR(Plugin):
         if len(image_list) <= self.interval:  # too many images may cause CUDA out of memory
             imgs = read_img_seq(image_list)
             imgs = imgs.unsqueeze(0).to(self.device)
-            result = self.basicvsr_inference(imgs, self.model, self.save_path)
+            result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
             new_img_list.extend(result)
         else:
             for idx in range(0, num_imgs, self.interval):
@@ -215,7 +224,7 @@ class SR(Plugin):
                 imgs = image_list[idx:idx + interval]
                 imgs = read_img_seq(imgs)
                 imgs = imgs.unsqueeze(0).to(self.device)
-                result = self.basicvsr_inference(imgs, self.model, self.save_path)
+                result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
                 new_img_list.extend(result)
         return new_img_list
 

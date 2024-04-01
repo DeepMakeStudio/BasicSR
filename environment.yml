@@ -1,0 +1,27 @@
+name: basicsr
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - pip
+  - python=3.8
+  - pytorch 
+  - torchvision
+  - pytorch-cuda
+  - pip:
+      - anyio
+      - basicsr
+      - click
+      - fastapi
+      - h11
+      - huey
+      - idna
+      - opencv-python
+      - psutil
+      - pydantic
+      - requests
+      - rq
+      - sniffio
+      - starlette
+      - uvicorn
