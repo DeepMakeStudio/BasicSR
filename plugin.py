@@ -22,10 +22,6 @@ from basicsr.archs.swinir_arch import SwinIR
 from .inference.inference_swinir import define_model
 from torch.nn import functional as F
 
-
-
-
-
 app = FastAPI()
 
 def check_model():
@@ -76,13 +72,14 @@ def execute(img_id: str):
     image = fetch_pil_image(img_id)
     # image = Image.open(BytesIO(imagebytes))
 
-    output_img = sr_plugin.super_res(image)
-    # output = BytesIO()
+    try:
+        output_img = sr_plugin.super_res(image)
+    except torch.cuda.OutOfMemoryError:
+        return {"status": "Failed", "detail": "CUDA out of memory"}
 
     if output_img is None:
         return {"status": "Failed", "detail": "Super resolution failed"}
     
-    # output_img.save(output, format="PNG")
     output_img_id = store_pil_image(output_img)
 
     return {"status": "Success", "output_id": output_img_id}
@@ -99,7 +96,10 @@ def video_superres(img_list_id: str):
     image_list = [np.array(frame) for frame in pil_frames]
     image_list = np.array(image_list)
     # image = np.array(image)
-    output_list = sr_plugin.video_super_res(image_list)
+    try:
+        output_list = sr_plugin.video_super_res(image_list)
+    except torch.cuda.OutOfMemoryError:
+        return {"status": "Failed", "detail": "CUDA out of memory"}
     pil_output = [Image.fromarray(frame) for frame in output_list]
     # image_ids = [store_pil_image(frame) for frame in pil_output]
     # image_id = store_image(bytes(";".join(image_ids).encode("utf-8")))
