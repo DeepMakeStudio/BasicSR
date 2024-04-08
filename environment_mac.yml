@@ -9,7 +9,8 @@ dependencies:
   - torchvision
   - pip:
       - anyio
-      - basicsr
+      - einops
+      - git+https://github.com/roland-arkavian/BasicSR.git
       - click
       - fastapi
       - h11

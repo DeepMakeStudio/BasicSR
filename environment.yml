@@ -7,7 +7,7 @@ dependencies:
   - pip
   - python=3.8
   - pytorch 
-  - torchvision
+  - torchvision<0.17
   - pytorch-cuda
   - pip:
       - anyio
