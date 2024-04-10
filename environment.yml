@@ -11,7 +11,7 @@ dependencies:
   - pytorch-cuda
   - pip:
       - anyio
-      - basicsr
+      - git+https://github.com/roland-arkavian/BasicSR.git
       - click
       - fastapi
       - h11
