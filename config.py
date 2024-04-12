@@ -27,6 +27,7 @@ endpoints = {
         "call": "video_superres",
         "inputs": {
             "img_list_id": "ImageList",
+            "interval": "Int"
         },
         "outputs": {"output_imgs": "Image"}
     }

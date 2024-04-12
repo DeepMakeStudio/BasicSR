@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from PIL import Image
 import numpy as np
 
@@ -81,14 +81,16 @@ def execute(img_id: str):
 
     if output_img is None:
         return {"status": "Failed", "detail": "Super resolution failed"}
+    elif output_img == 0:
+        return {"status": "Failed", "detail": "Image is too large for the model to process. Try a smaller image."}
     
     # output_img.save(output, format="PNG")
     output_img_id = store_pil_image(output_img)
 
     return {"status": "Success", "output_id": output_img_id}
 
-@app.get("/video_superres/{img_list_id}")
-def video_superres(img_list_id: str):
+@app.get("/video_superres/{img_list_id}/{interval}")
+def video_superres(img_list_id: str, interval: int = 12):
     # check_model()
     id_data = fetch_image(img_list_id)
     id_list = id_data.decode("utf-8").split(";")
@@ -99,7 +101,9 @@ def video_superres(img_list_id: str):
     image_list = [np.array(frame) for frame in pil_frames]
     image_list = np.array(image_list)
     # image = np.array(image)
-    output_list = sr_plugin.video_super_res(image_list)
+    output_list = sr_plugin.video_super_res(image_list, interval)
+    if output_list == 0:
+        return {"status": "Failed", "detail": "Interval too large for the model to process. Try a smaller interval."}
     pil_output = [Image.fromarray(frame) for frame in output_list]
 
     # image_ids = [store_pil_image(frame) for frame in pil_output]
@@ -167,9 +171,7 @@ class SR(Plugin):
 
         self.vsr_model = BasicVSR(num_feat=64, num_block=30)
         self.load_model(self.basicvsr_model_path, self.vsr_model)
-        self.interval = 12
-        self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
-    
+        self.save_path = ""
 
     def super_res(self, inputs, model="esrgan"):
         """
@@ -179,27 +181,31 @@ class SR(Plugin):
         image = np.array(image) / 255
         img = torch.from_numpy(np.transpose(image[:, :, [2, 1, 0]], (2, 0, 1))).float()
         img = img.unsqueeze(0).to(self.device)
-        if model == "esrgan":
-            with torch.no_grad():
-                esrgan_output = self.esrgan_model(img)
-                output_img = self.to_image(esrgan_output)
-        elif model == "swinir":
-            if self.swin_model is not None:
+        try:
+            if model == "esrgan":
                 with torch.no_grad():
-                    window_size = 8
-                # pad input image to be a multiple of window_size
-                    mod_pad_h, mod_pad_w = 0, 0
-                    _, _, h, w = img.size()
-                    if h % window_size != 0:
-                        mod_pad_h = window_size - h % window_size
-                    if w % window_size != 0:
-                        mod_pad_w = window_size - w % window_size
-                    img = F.pad(img, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
+                    esrgan_output = self.esrgan_model(img)
+                    output_img = self.to_image(esrgan_output)
+            elif model == "swinir":
+                if self.swin_model is not None:
+                    with torch.no_grad():
+                        window_size = 8
+                    # pad input image to be a multiple of window_size
+                        mod_pad_h, mod_pad_w = 0, 0
+                        _, _, h, w = img.size()
+                        if h % window_size != 0:
+                            mod_pad_h = window_size - h % window_size
+                        if w % window_size != 0:
+                            mod_pad_w = window_size - w % window_size
+                        img = F.pad(img, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
 
-                    output = self.swin_model(img)
-                    _, _, h, w = output.size()
-                    swinir_output = output[:, :, 0:h - mod_pad_h * self.swin_scale, 0:w - mod_pad_w * self.swin_scale]
-            output_img = self.to_image(swinir_output)
+                        output = self.swin_model(img)
+                        _, _, h, w = output.size()
+                        swinir_output = output[:, :, 0:h - mod_pad_h * self.swin_scale, 0:w - mod_pad_w * self.swin_scale]
+                output_img = self.to_image(swinir_output)
+        except Exception as e:
+            if "out of memory" in str(e):
+                return 0
         return output_img
 
     def to_image(self, input):
@@ -212,24 +218,30 @@ class SR(Plugin):
         else:
             return None
 
-    def video_super_res(self, image_list):
+    def video_super_res(self, image_list, interval=12):
         new_img_list = []
         num_imgs = len(image_list)
         print([img.shape for img in image_list])
-
-        if len(image_list) <= self.interval:  # too many images may cause CUDA out of memory
-            imgs = read_img_seq(image_list)
-            imgs = imgs.unsqueeze(0).to(self.device)
-            result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
-            new_img_list.extend(result)
-        else:
-            for idx in range(0, num_imgs, self.interval):
-                interval = min(self.interval, num_imgs - idx)
-                imgs = image_list[idx:idx + interval]
-                imgs = read_img_seq(imgs)
+        try:
+            if len(image_list) <= interval:  # too many images may cause CUDA out of memory
+                imgs = read_img_seq(image_list)
                 imgs = imgs.unsqueeze(0).to(self.device)
                 result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
                 new_img_list.extend(result)
+            else:
+                for idx in range(0, num_imgs, interval):
+                    interval = min(interval, num_imgs - idx)
+                    imgs = image_list[idx:idx + interval]
+                    imgs = read_img_seq(imgs)
+                    imgs = imgs.unsqueeze(0).to(self.device)
+                    result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
+                    new_img_list.extend(result)
+        except Exception as e:
+            if "out of memory" in str(e):
+                return 0
+            raise e
+    
+                
         print([img.shape for img in new_img_list])
         return new_img_list
 
