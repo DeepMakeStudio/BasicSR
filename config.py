@@ -12,6 +12,7 @@ plugin = {
 config = {
     "esrgan_model": "ESRGAN/ESRGAN_SRx4_DF2KOST_official-ff704c30.pth",
     "swinir_model": "SwinIR/001_classicalSR_DIV2K_s48w8_SwinIR-M_x4.pth",
+    "vsr_model": "BasicVSR/BasicVSR_REDS4.pth",
     "model_dtype": "fp32" if sys.platform == "darwin" else "fp16"
 }
 endpoints = {

@@ -101,6 +101,7 @@ def video_superres(img_list_id: str):
     # image = np.array(image)
     output_list = sr_plugin.video_super_res(image_list)
     pil_output = [Image.fromarray(frame) for frame in output_list]
+
     # image_ids = [store_pil_image(frame) for frame in pil_output]
     # image_id = store_image(bytes(";".join(image_ids).encode("utf-8")))
     image_id = store_multiple(pil_output, store_pil_image)
@@ -129,6 +130,7 @@ class SR(Plugin):
         model_folder = "plugin/BasicSR/experiments/pretrained_models/"
         self.esrgan_model_path = os.path.join(model_folder, arguments.config["esrgan_model"])
         self.swinir_model_path = os.path.join(model_folder, arguments.config["swinir_model"])
+        self.basicvsr_model_path = os.path.join(model_folder, arguments.config["vsr_model"])
         if sys.platform == "darwin":
             self.device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
         else:
@@ -164,7 +166,7 @@ class SR(Plugin):
             self.load_model(self.swinir_model_path, self.swin_model)
 
         self.vsr_model = BasicVSR(num_feat=64, num_block=30)
-        self.vsr_model.to(self.device)
+        self.load_model(self.basicvsr_model_path, self.vsr_model)
         self.interval = 12
         self.save_path = "plugin/BasicSuperRes/results/BasicVSR"
     
@@ -213,6 +215,8 @@ class SR(Plugin):
     def video_super_res(self, image_list):
         new_img_list = []
         num_imgs = len(image_list)
+        print([img.shape for img in image_list])
+
         if len(image_list) <= self.interval:  # too many images may cause CUDA out of memory
             imgs = read_img_seq(image_list)
             imgs = imgs.unsqueeze(0).to(self.device)
@@ -226,6 +230,7 @@ class SR(Plugin):
                 imgs = imgs.unsqueeze(0).to(self.device)
                 result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
                 new_img_list.extend(result)
+        print([img.shape for img in new_img_list])
         return new_img_list
 
     
