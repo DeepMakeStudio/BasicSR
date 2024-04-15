@@ -26,8 +26,7 @@ endpoints = {
     "upres_video": {
         "call": "video_superres",
         "inputs": {
-            "img_list_id": "ImageList",
-            "interval": "Int"
+            "img_list_id": "ImageList"
         },
         "outputs": {"output_imgs": "Image"}
     }

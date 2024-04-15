@@ -89,7 +89,7 @@ def execute(img_id: str):
 
     return {"status": "Success", "output_id": output_img_id}
 
-@app.get("/video_superres/{img_list_id}/{interval}")
+@app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str, interval: int = 12):
     # check_model()
     id_data = fetch_image(img_list_id)
@@ -101,9 +101,21 @@ def video_superres(img_list_id: str, interval: int = 12):
     image_list = [np.array(frame) for frame in pil_frames]
     image_list = np.array(image_list)
     # image = np.array(image)
-    output_list = sr_plugin.video_super_res(image_list, interval)
-    if output_list == 0:
-        return {"status": "Failed", "detail": "Interval too large for the model to process. Try a smaller interval."}
+    try:
+        output_list = sr_plugin.video_super_res(image_list, interval)
+    except Exception as e:
+        if "out of memory" in str(e):
+            try:
+                print("Out of memory, trying again with smaller interval of 4 frames.")
+                output_list = sr_plugin.video_super_res(image_list, interval // 3)
+            except Exception as e:
+                if "out of memory" in str(e):
+                    try:
+                        print("Out of memory, trying again with smaller interval of 1 frame.")
+                        output_list = sr_plugin.video_super_res(image_list, 1)
+                    except Exception as e:
+                        return {"status": "Failed", "detail": "Out of memory. Try a smaller video."}
+        
     pil_output = [Image.fromarray(frame) for frame in output_list]
 
     # image_ids = [store_pil_image(frame) for frame in pil_output]
@@ -222,24 +234,20 @@ class SR(Plugin):
         new_img_list = []
         num_imgs = len(image_list)
         print([img.shape for img in image_list])
-        try:
-            if len(image_list) <= interval:  # too many images may cause CUDA out of memory
-                imgs = read_img_seq(image_list)
+        if len(image_list) <= interval:  # too many images may cause CUDA out of memory
+            imgs = read_img_seq(image_list)
+            imgs = imgs.unsqueeze(0).to(self.device)
+            result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
+            new_img_list.extend(result)
+        else:
+            for idx in range(0, num_imgs, interval):
+                interval = min(interval, num_imgs - idx)
+                imgs = image_list[idx:idx + interval]
+                imgs = read_img_seq(imgs)
                 imgs = imgs.unsqueeze(0).to(self.device)
                 result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
                 new_img_list.extend(result)
-            else:
-                for idx in range(0, num_imgs, interval):
-                    interval = min(interval, num_imgs - idx)
-                    imgs = image_list[idx:idx + interval]
-                    imgs = read_img_seq(imgs)
-                    imgs = imgs.unsqueeze(0).to(self.device)
-                    result = self.basicvsr_inference(imgs, self.vsr_model, self.save_path)
-                    new_img_list.extend(result)
-        except Exception as e:
-            if "out of memory" in str(e):
-                return 0
-            raise e
+        
     
                 
         print([img.shape for img in new_img_list])
