@@ -87,7 +87,7 @@ def execute(img_id: str):
     # output_img.save(output, format="PNG")
     output_img_id = store_pil_image(output_img)
 
-    return {"status": "Success", "output_id": output_img_id}
+    return {"status": "Success", "output_img": output_img_id}
 
 @app.get("/video_superres/{img_list_id}")
 def video_superres(img_list_id: str, interval: int = 12):

@@ -25,6 +25,7 @@ endpoints = {
     },
     "upres_video": {
         "call": "video_superres",
+        "tag": "video",
         "inputs": {
             "img_list_id": "ImageList"
         },
