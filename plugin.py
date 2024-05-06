@@ -122,7 +122,7 @@ def video_superres(img_list_id: str, interval: int = 12):
     # image_id = store_image(bytes(";".join(image_ids).encode("utf-8")))
     image_id = store_multiple(pil_output, store_pil_image)
 
-    return {"status": "Success", "output_id": image_id}
+    return {"status": "Success", "output_img": image_id}
 
 def self_terminate():
     time.sleep(3)

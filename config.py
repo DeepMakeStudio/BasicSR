@@ -29,6 +29,6 @@ endpoints = {
         "inputs": {
             "img_list_id": "ImageList"
         },
-        "outputs": {"output_imgs": "Image"}
+        "outputs": {"output_img": "Image"}
     }
 }
