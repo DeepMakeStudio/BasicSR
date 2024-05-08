@@ -141,8 +141,7 @@ class SR(Plugin):
     Prediction inference.
     """
     def __init__(self, arguments: "Namespace") -> None:
-        super().__init__(arguments)
-        self.plugin_name = "BasicSR"
+        super().__init__(arguments, plugin_name="BasicSR")
         model_folder = "plugin/BasicSR/experiments/pretrained_models/"
         self.esrgan_model_path = os.path.join(model_folder, arguments.config["esrgan_model"])
         self.swinir_model_path = os.path.join(model_folder, arguments.config["swinir_model"])
